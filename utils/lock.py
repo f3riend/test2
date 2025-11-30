@@ -7,15 +7,18 @@ import datetime
 import hashlib
 import tarfile
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed  # YENİ
+import threading  # YENİ
 
 
 class Lock:
-    def __init__(self, password, folder,name="data"):
+    def __init__(self, password, folder, name="data", max_workers=4):  # YENİ: max_workers
         self.password = password
         self.folder = folder
         self.output = name + ".bin"
         self.tar_path = name + ".tar"
-        self.chunk_size = 32 * 1024 * 1024
+        self.chunk_size = 8 * 1024 * 1024  # 8MB
+        self.max_workers = max_workers  # YENİ: Thread sayısı
         
         self.key = self.password_to_key(password)
     
@@ -53,10 +56,128 @@ class Lock:
                         tar.add(full_path, arcname=arcname)
                         progress.update(task, advance=file_size)
     
-    def encrypt_stream(self, path, outpath, key):
-        """Encrypt the file"""
+    def _encrypt_chunk(self, chunk_data, chunk_index):
+        """
+        Encrypt a single chunk (thread-safe)
+        
+        Returns: (chunk_index, encrypted_data)
+        """
+        aes = AESGCM(self.key)
+        nonce = os.urandom(12)
+        enc = aes.encrypt(nonce, chunk_data, None)
+        
+        # Format: length (4) + nonce (12) + encrypted
+        result = len(enc).to_bytes(4, 'big') + nonce + enc
+        
+        return (chunk_index, result)
+    
+    def encrypt_stream_parallel(self, path, outpath, checkpoint=None):
+        """
+        Encrypt file using parallel threads
+        
+        Args:
+            path: Input file
+            outpath: Output file
+            checkpoint: Resume checkpoint
+        """
+        total_size = os.path.getsize(path)
+        
+        # Resume settings
+        start_position = 0
+        start_chunk_index = 0
+        
+        if checkpoint:
+            start_position = checkpoint.get('bytes_written', 0)
+            start_chunk_index = checkpoint.get('chunk_index', 0)
+            logger.info(f"Resuming from byte {start_position}, chunk {start_chunk_index}")
+        
+        with Progress(
+            TextColumn("🔒 Encrypting (multi-threaded) "),
+            ASCIIBar(),
+            TextColumn(" {task.percentage:>5.1f}%"),
+            TimeElapsedColumn(),
+        ) as progress:
+            task = progress.add_task("enc", total=total_size)
+            
+            if start_position > 0:
+                progress.update(task, completed=start_position)
+            
+            mode = 'ab' if checkpoint else 'wb'
+            
+            with open(path, 'rb') as fin, open(outpath, mode) as fout:
+                # Seek to resume position
+                if start_position > 0:
+                    fin.seek(start_position)
+                
+                bytes_written = start_position
+                chunk_index = start_chunk_index
+                write_lock = threading.Lock()  # Thread-safe file writing
+                
+                # Thread pool
+                with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                    futures = {}
+                    chunks_to_process = []
+                    
+                    # Read chunks and submit to thread pool
+                    while True:
+                        chunk_data = fin.read(self.chunk_size)
+                        if not chunk_data:
+                            break
+                        
+                        # Submit encryption task
+                        future = executor.submit(
+                            self._encrypt_chunk, 
+                            chunk_data, 
+                            chunk_index
+                        )
+                        futures[future] = chunk_index
+                        chunks_to_process.append((chunk_index, len(chunk_data)))
+                        chunk_index += 1
+                        
+                        # Process completed chunks in order
+                        if len(futures) >= self.max_workers * 2:
+                            self._write_completed_chunks(
+                                futures, fout, progress, task, 
+                                write_lock, bytes_written, chunk_index
+                            )
+                    
+                    # Write remaining chunks
+                    for future in as_completed(futures):
+                        idx, encrypted = future.result()
+                        
+                        with write_lock:
+                            fout.write(encrypted)
+                            
+                            # Update progress
+                            original_size = next(
+                                size for i, size in chunks_to_process if i == idx
+                            )
+                            bytes_written += original_size
+                            progress.update(task, advance=original_size)
+                            
+                            # Checkpoint every 10 chunks
+                            if idx % 10 == 0:
+                                safe = SafeBackupWriter(self.output)
+                                safe.write_checkpoint(bytes_written, idx)
+    
+    def encrypt_stream(self, path, outpath, key, checkpoint=None):
+        """
+        Single-threaded encryption (fallback)
+        """
         aes = AESGCM(key)
         total_size = os.path.getsize(path)
+        
+        # Resume settings
+        start_position = 0
+        chunk_index = 0
+        
+        if checkpoint:
+            start_position = checkpoint.get('bytes_written', 0)
+            chunk_index = checkpoint.get('chunk_index', 0)
+            logger.info(f"Resuming from byte {start_position}, chunk {chunk_index}")
+        
+        # Pre-allocate buffer
+        buffer = bytearray(self.chunk_size)
         
         with Progress(
             TextColumn("🔒 Encrypting "),
@@ -66,46 +187,67 @@ class Lock:
         ) as progress:
             task = progress.add_task("enc", total=total_size)
             
-            with open(path, 'rb') as fin, open(outpath, 'wb') as fout:
+            if start_position > 0:
+                progress.update(task, completed=start_position)
+            
+            mode = 'ab' if checkpoint else 'wb'
+            
+            with open(path, 'rb') as fin, open(outpath, mode) as fout:
+                if start_position > 0:
+                    fin.seek(start_position)
+                
+                bytes_written = start_position
+                
                 while True:
-                    chunk = fin.read(self.chunk_size)
-                    if not chunk:
+                    bytes_read = fin.readinto(buffer)
+                    if bytes_read == 0:
                         break
                     
                     nonce = os.urandom(12)
-                    enc = aes.encrypt(nonce, chunk, None)
+                    enc = aes.encrypt(nonce, buffer[:bytes_read], None)
                     
                     fout.write(len(enc).to_bytes(4, 'big'))
                     fout.write(nonce)
                     fout.write(enc)
                     
-                    progress.update(task, advance=len(chunk))
+                    bytes_written += bytes_read
+                    chunk_index += 1
+                    
+                    progress.update(task, advance=bytes_read)
+                    
+                    # Checkpoint
+                    if chunk_index % 10 == 0:
+                        safe = SafeBackupWriter(self.output)
+                        safe.write_checkpoint(bytes_written, chunk_index)
     
-    def run(self):
+    def run(self, resume=False, use_threading=True):  # YENİ: use_threading flag
+        """
+        Run lock process
+        
+        Args:
+            resume: Resume from checkpoint
+            use_threading: Use multi-threaded encryption
+        """
         logger.info("[+] Folder is being packed...")
-        self.create_tar_stream(self.folder, self.tar_path)
+        
+        if not resume or not os.path.exists(self.tar_path):
+            self.create_tar_stream(self.folder, self.tar_path)
+        else:
+            logger.info("[+] Using existing TAR file for resume")
 
-        logger.info("[+] Encrypting (safe)...")
+        logger.info(f"[+] Encrypting (safe, threads={self.max_workers if use_threading else 1})...")
 
         safe = SafeBackupWriter(self.output)
 
-        def encrypt_to_tmp(tmp_path):
-            self.encrypt_stream(self.tar_path, tmp_path, self.key)
+        def encrypt_to_tmp(tmp_path, checkpoint):
+            if use_threading:
+                self.encrypt_stream_parallel(self.tar_path, tmp_path, checkpoint)
+            else:
+                self.encrypt_stream(self.tar_path, tmp_path, self.key, checkpoint)
 
-        safe.write_backup(encrypt_to_tmp)
+        safe.write_backup(encrypt_to_tmp, resume=resume)
 
-        os.remove(self.tar_path)
+        if os.path.exists(self.tar_path):
+            os.remove(self.tar_path)
 
         logger.info("[✓] Safe backup created:", self.output)
-
-
-
-
-if __name__ == "__main__":
-    import getpass
-    
-    password = getpass.getpass("Password: ")
-    folder = input("Folder name: ")
-    
-    locker = Lock(password, folder)
-    locker.run()

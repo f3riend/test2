@@ -1,44 +1,48 @@
-from utils.observer import *
-from utils.mail_manager import MailManager
-from utils.tools import protect_file
-from utils.unlock import Unlock
-from utils.lock import Lock
-from utils.logger import logger
-import base64
-import getpass
 import click
-import os
+from utils.lock import Lock
+from utils.unlock import Unlock
+from utils.logger import logger
 
 
 @click.group()
-def secure_box():
-    """Secure Box CLI"""
+def cli():
+    """Secure Box - File encryption tool"""
     pass
 
 
-@secure_box.command()
-@click.argument("folder")
-@click.argument("filename")
-@click.argument("password")
-def lock(folder, filename, password):
-    """Lock file into binary"""
-    locker = Lock(password, folder, filename)
-    locker.run()
+@cli.command()
+@click.argument('folder', type=click.Path(exists=True))
+@click.argument('output', type=str)
+@click.argument('password', type=str)
+@click.option('--resume', is_flag=True, help='Resume from checkpoint if available')
+@click.option('--threads', default=4, help='Number of threads for encryption (default: 4)')  # YENİ
+@click.option('--no-threading', is_flag=True, help='Disable multi-threading')  # YENİ
+def lock(folder, output, password, resume, threads, no_threading):
+    """Lock (encrypt) a folder"""
+    try:
+        locker = Lock(password, folder, output, max_workers=threads)
+        locker.run(resume=resume, use_threading=not no_threading)
+        click.echo(click.style("✓ Folder locked successfully!", fg='green'))
+    except Exception as e:
+        logger.error(f"Lock failed: {e}")
+        click.echo(click.style(f"✗ Lock failed: {e}", fg='red'))
+        raise SystemExit(1)
 
 
-@secure_box.command()
-def config():
-    print("Config")
+@cli.command()
+@click.argument('data_file', type=str)
+@click.argument('password', type=str)
+def unlock(data_file, password):
+    """Unlock (decrypt) a folder"""
+    try:
+        unlocker = Unlock(password, data_file)
+        unlocker.run()
+        click.echo(click.style("✓ Folder unlocked successfully!", fg='green'))
+    except Exception as e:
+        logger.error(f"Unlock failed: {e}")
+        click.echo(click.style(f"✗ Unlock failed: {e}", fg='red'))
+        raise SystemExit(1)
 
 
-@secure_box.command()
-@click.argument("filename")
-@click.argument("password")
-def unlock(filename, password):
-    """Unlock binary file"""
-    unlocker = Unlock(password, filename)
-    unlocker.run()
-
-
-if __name__ == "__main__":
-    secure_box()
+if __name__ == '__main__':
+    cli()

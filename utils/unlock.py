@@ -15,7 +15,7 @@ class Unlock(Lock):
     def __init__(self, password, data_file="data"):
         self.password = password
         self.data_file = data_file + ".bin"
-        self.chunk_size = 32 * 1024 * 1024
+        self.chunk_size = 8 * 1024 * 1024  # 8MB
         self.key = self.password_to_key(password)
         
         self.system = platform.system()
@@ -38,6 +38,18 @@ class Unlock(Lock):
         self.temp_dir = tempfile.mkdtemp(prefix="SECURE_", dir=temp_root)
         self.enc_path = os.path.join(self.temp_dir, "enc.bin")
         self.tar_path = os.path.join(self.temp_dir, "data.tar")
+
+    # --------------------------------------------------------
+    # CHUNK-BASED COPY (Memory efficient)
+    # --------------------------------------------------------
+    def _copy_in_chunks(self, src, dst, chunk_size=8*1024*1024):
+        """Memory-efficient file copy"""
+        with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
+            while True:
+                chunk = fsrc.read(chunk_size)
+                if not chunk:
+                    break
+                fdst.write(chunk)
 
     # --------------------------------------------------------
     # CLEANUP TEMP DIRECTORY
@@ -123,13 +135,16 @@ class Unlock(Lock):
             return
         
         self._setup_temp_directory()
-        shutil.copy(self.data_file, self.enc_path)
+        
+        # Use chunk-based copy instead of shutil.copy
+        logger.info("[+] Preparing decryption...")
+        self._copy_in_chunks(self.data_file, self.enc_path)
         
         logger.info("[+] The password is decoding...")
         try:
             self.decrypt_stream(self.enc_path, self.tar_path, self.key)
         except Exception as e:
-            logger.warning("Password is wrong or data is corrupted, error:", e)
+            logger.warning(f"Password is wrong or data is corrupted, error: {e}")
             self._cleanup_temp()
             return
         
@@ -147,7 +162,7 @@ class Unlock(Lock):
         logger.info("[+] Encrypting (safe)...")
         safe = SafeBackupWriter(self.data_file)
 
-        def encrypt_tmp(tmp_path):
+        def encrypt_tmp(tmp_path, checkpoint):  # FIXED: checkpoint parametresi
             self.encrypt_stream(self.tar_path, tmp_path, self.key)
         
         safe.write_backup(encrypt_tmp)
@@ -162,5 +177,5 @@ if __name__ == "__main__":
     import getpass
     
     password = getpass.getpass("Password: ")
-    unlocker = Unlock(password,data_file="second")
+    unlocker = Unlock(password, data_file="second")
     unlocker.run()
