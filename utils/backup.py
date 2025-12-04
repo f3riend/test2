@@ -4,7 +4,11 @@ import hashlib
 import time
 import tempfile
 import shutil
-from .logger import logger
+from .logger import auto_logger
+
+
+
+logger = auto_logger()
 
 
 class SafeBackupWriter:
@@ -12,7 +16,7 @@ class SafeBackupWriter:
         self.out_path = out_path
         self.hash_path = out_path + ".sha256"
         self.state_path = out_path + ".state"
-        self.checkpoint_path = out_path + ".checkpoint"  # YENİ
+        self.checkpoint_path = out_path + ".checkpoint"  
     
     def sha256_file(self, path):
         sha = hashlib.sha256()
@@ -78,7 +82,6 @@ class SafeBackupWriter:
                 logger.info("Cleaning up incomplete backup...")
                 os.remove(self.state_path)
                 
-                # Ask user if they want to resume
                 if os.path.exists(self.checkpoint_path):
                     logger.info("Incomplete backup found. Use resume=True to continue.")
     
@@ -98,27 +101,22 @@ class SafeBackupWriter:
         tmp_path = None
 
         try:
-            # Create temp file in SAME directory as output
             target_dir = os.path.dirname(os.path.abspath(self.out_path)) or '.'
             
             with tempfile.NamedTemporaryFile(
                 delete=False, 
-                dir=target_dir,  # Same directory prevents cross-device issues
+                dir=target_dir,
                 prefix=".tmp_securebox_",
                 suffix=".bin"
             ) as tmp:
                 tmp_path = tmp.name
 
-            # Write to temp file
-            writer_function(tmp_path, checkpoint)
             
-            # Calculate hash
+            writer_function(tmp_path, checkpoint)
             file_hash = self.sha256_file(tmp_path)
             
-            # Atomic move (handles cross-device automatically)
+
             shutil.move(tmp_path, self.out_path)
-            
-            # Write hash file
             with open(self.hash_path, "w") as f:
                 f.write(file_hash)
 

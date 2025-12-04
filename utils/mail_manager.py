@@ -1,7 +1,9 @@
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from .logger import logger
+from .logger import auto_logger
 import smtplib
+
+logger = auto_logger()
 
 class MailManager:
     def __init__(self, sender, receiver, password, subject, body):

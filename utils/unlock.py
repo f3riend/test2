@@ -1,7 +1,7 @@
 from .lock import Lock
 from .tools import ASCIIBar
 from .backup import SafeBackupWriter
-from .logger import logger
+from .logger import auto_logger
 from rich.progress import Progress, TextColumn, TimeElapsedColumn
 import subprocess
 import platform
@@ -11,11 +11,13 @@ import shutil
 import os
 
 
+logger = auto_logger()
+
 class Unlock(Lock):
     def __init__(self, password, data_file="data"):
         self.password = password
         self.data_file = data_file + ".bin"
-        self.chunk_size = 8 * 1024 * 1024  # 8MB
+        self.chunk_size = 8 * 1024 * 1024
         self.key = self.password_to_key(password)
         
         self.system = platform.system()
@@ -23,9 +25,6 @@ class Unlock(Lock):
         self.enc_path = None
         self.tar_path = None
 
-    # --------------------------------------------------------
-    # TEMP DIRECTORY SETUP
-    # --------------------------------------------------------
     def _setup_temp_directory(self):
         """Create a temporary directory"""
         if self.system == "Windows":
@@ -39,9 +38,6 @@ class Unlock(Lock):
         self.enc_path = os.path.join(self.temp_dir, "enc.bin")
         self.tar_path = os.path.join(self.temp_dir, "data.tar")
 
-    # --------------------------------------------------------
-    # CHUNK-BASED COPY (Memory efficient)
-    # --------------------------------------------------------
     def _copy_in_chunks(self, src, dst, chunk_size=8*1024*1024):
         """Memory-efficient file copy"""
         with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
@@ -51,9 +47,6 @@ class Unlock(Lock):
                     break
                 fdst.write(chunk)
 
-    # --------------------------------------------------------
-    # CLEANUP TEMP DIRECTORY
-    # --------------------------------------------------------
     def _cleanup_temp(self):
         """Clear temporary files"""
         if self.temp_dir and os.path.exists(self.temp_dir):
@@ -63,9 +56,6 @@ class Unlock(Lock):
             
             shutil.rmtree(self.temp_dir, onerror=remove_readonly)
 
-    # --------------------------------------------------------
-    # DECRYPT
-    # --------------------------------------------------------
     def decrypt_stream(self, in_path, out_path, key):
         """Decrypt the encrypted file"""
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -95,9 +85,6 @@ class Unlock(Lock):
                     
                     progress.update(task, advance=4 + 12 + block_len)
 
-    # --------------------------------------------------------
-    # EXTRACT TAR
-    # --------------------------------------------------------
     def extract_tar_stream(self, tar_path, out_dir):
         """Open the TAR archive"""
         with tarfile.open(tar_path, "r") as tar:
@@ -115,9 +102,6 @@ class Unlock(Lock):
                     tar.extract(member, path=out_dir)
                     progress.update(task, advance=1)
 
-    # --------------------------------------------------------
-    # OPEN FOLDER
-    # --------------------------------------------------------
     def open_folder(self):
         """Open the folder for user"""
         if self.system == "Windows":
@@ -125,9 +109,6 @@ class Unlock(Lock):
         else:
             subprocess.Popen(["xdg-open", self.temp_dir])
 
-    # --------------------------------------------------------
-    # MAIN RUN
-    # --------------------------------------------------------
     def run(self):
         """Main process"""
         if not os.path.exists(self.data_file):
@@ -136,7 +117,7 @@ class Unlock(Lock):
         
         self._setup_temp_directory()
         
-        # Use chunk-based copy instead of shutil.copy
+
         logger.info("[+] Preparing decryption...")
         self._copy_in_chunks(self.data_file, self.enc_path)
         
@@ -162,7 +143,7 @@ class Unlock(Lock):
         logger.info("[+] Encrypting (safe)...")
         safe = SafeBackupWriter(self.data_file)
 
-        def encrypt_tmp(tmp_path, checkpoint):  # FIXED: checkpoint parametresi
+        def encrypt_tmp(tmp_path, checkpoint):
             self.encrypt_stream(self.tar_path, tmp_path, self.key)
         
         safe.write_backup(encrypt_tmp)

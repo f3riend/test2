@@ -1,7 +1,10 @@
 import click
 from utils.lock import Lock
 from utils.unlock import Unlock
-from utils.logger import logger
+from utils.logger import auto_logger
+
+
+logger = auto_logger()
 
 
 @click.group()
@@ -15,8 +18,8 @@ def cli():
 @click.argument('output', type=str)
 @click.argument('password', type=str)
 @click.option('--resume', is_flag=True, help='Resume from checkpoint if available')
-@click.option('--threads', default=4, help='Number of threads for encryption (default: 4)')  # YENİ
-@click.option('--no-threading', is_flag=True, help='Disable multi-threading')  # YENİ
+@click.option('--threads', default=4, help='Number of threads for encryption (default: 4)')
+@click.option('--no-threading', is_flag=True, help='Disable multi-threading')
 def lock(folder, output, password, resume, threads, no_threading):
     """Lock (encrypt) a folder"""
     try:

@@ -1,24 +1,27 @@
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .tools import ASCIIBar
 from .backup import SafeBackupWriter
-from .logger import logger
+from .logger import auto_logger
 from rich.progress import Progress, TextColumn, TimeElapsedColumn
 import datetime
 import hashlib
 import tarfile
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed  # YENİ
-import threading  # YENİ
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+
+
+logger = auto_logger()
 
 
 class Lock:
-    def __init__(self, password, folder, name="data", max_workers=4):  # YENİ: max_workers
+    def __init__(self, password, folder, name="data", max_workers=4):  
         self.password = password
         self.folder = folder
         self.output = name + ".bin"
         self.tar_path = name + ".tar"
-        self.chunk_size = 8 * 1024 * 1024  # 8MB
-        self.max_workers = max_workers  # YENİ: Thread sayısı
+        self.chunk_size = 8 * 1024 * 1024
+        self.max_workers = max_workers
         
         self.key = self.password_to_key(password)
     
@@ -66,7 +69,7 @@ class Lock:
         nonce = os.urandom(12)
         enc = aes.encrypt(nonce, chunk_data, None)
         
-        # Format: length (4) + nonce (12) + encrypted
+
         result = len(enc).to_bytes(4, 'big') + nonce + enc
         
         return (chunk_index, result)
@@ -82,7 +85,7 @@ class Lock:
         """
         total_size = os.path.getsize(path)
         
-        # Resume settings
+
         start_position = 0
         start_chunk_index = 0
         
@@ -105,26 +108,24 @@ class Lock:
             mode = 'ab' if checkpoint else 'wb'
             
             with open(path, 'rb') as fin, open(outpath, mode) as fout:
-                # Seek to resume position
                 if start_position > 0:
                     fin.seek(start_position)
                 
                 bytes_written = start_position
                 chunk_index = start_chunk_index
-                write_lock = threading.Lock()  # Thread-safe file writing
+                write_lock = threading.Lock()
                 
-                # Thread pool
+
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     futures = {}
                     chunks_to_process = []
                     
-                    # Read chunks and submit to thread pool
                     while True:
                         chunk_data = fin.read(self.chunk_size)
                         if not chunk_data:
                             break
                         
-                        # Submit encryption task
+
                         future = executor.submit(
                             self._encrypt_chunk, 
                             chunk_data, 
@@ -134,28 +135,25 @@ class Lock:
                         chunks_to_process.append((chunk_index, len(chunk_data)))
                         chunk_index += 1
                         
-                        # Process completed chunks in order
                         if len(futures) >= self.max_workers * 2:
                             self._write_completed_chunks(
                                 futures, fout, progress, task, 
                                 write_lock, bytes_written, chunk_index
                             )
                     
-                    # Write remaining chunks
                     for future in as_completed(futures):
                         idx, encrypted = future.result()
                         
                         with write_lock:
                             fout.write(encrypted)
                             
-                            # Update progress
                             original_size = next(
                                 size for i, size in chunks_to_process if i == idx
                             )
                             bytes_written += original_size
                             progress.update(task, advance=original_size)
                             
-                            # Checkpoint every 10 chunks
+
                             if idx % 10 == 0:
                                 safe = SafeBackupWriter(self.output)
                                 safe.write_checkpoint(bytes_written, idx)
@@ -167,7 +165,6 @@ class Lock:
         aes = AESGCM(key)
         total_size = os.path.getsize(path)
         
-        # Resume settings
         start_position = 0
         chunk_index = 0
         
@@ -176,7 +173,6 @@ class Lock:
             chunk_index = checkpoint.get('chunk_index', 0)
             logger.info(f"Resuming from byte {start_position}, chunk {chunk_index}")
         
-        # Pre-allocate buffer
         buffer = bytearray(self.chunk_size)
         
         with Progress(
@@ -215,12 +211,11 @@ class Lock:
                     
                     progress.update(task, advance=bytes_read)
                     
-                    # Checkpoint
                     if chunk_index % 10 == 0:
                         safe = SafeBackupWriter(self.output)
                         safe.write_checkpoint(bytes_written, chunk_index)
     
-    def run(self, resume=False, use_threading=True):  # YENİ: use_threading flag
+    def run(self, resume=False, use_threading=True):
         """
         Run lock process
         

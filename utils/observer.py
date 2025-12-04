@@ -1,8 +1,11 @@
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from time import sleep
-from .logger import logger
+from .logger import auto_logger
 import os
+
+
+logger = auto_logger()
 
 
 class FolderObserver(FileSystemEventHandler):
