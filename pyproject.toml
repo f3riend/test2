@@ -13,6 +13,9 @@ dependencies = [
     "pytest>=9.0.1",
     "pyyaml>=6.0.3",
     "rich>=14.2.0",
+    "setuptools>=80.9.0",
     "watchdog>=6.0.0",
 ]
 
+[tool.pytest.ini_options]
+pythonpath = ["."]

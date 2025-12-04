@@ -18,13 +18,11 @@ def cli():
 @click.argument('output', type=str)
 @click.argument('password', type=str)
 @click.option('--resume', is_flag=True, help='Resume from checkpoint if available')
-@click.option('--threads', default=4, help='Number of threads for encryption (default: 4)')
-@click.option('--no-threading', is_flag=True, help='Disable multi-threading')
-def lock(folder, output, password, resume, threads, no_threading):
+def lock(folder, output, password, resume):
     """Lock (encrypt) a folder"""
     try:
-        locker = Lock(password, folder, output, max_workers=threads)
-        locker.run(resume=resume, use_threading=not no_threading)
+        locker = Lock(password, folder, output)
+        locker.run(resume=resume)
         click.echo(click.style("✓ Folder locked successfully!", fg='green'))
     except Exception as e:
         logger.error(f"Lock failed: {e}")

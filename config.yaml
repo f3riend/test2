@@ -1,16 +1,7 @@
 mode: auto
 
+
 manual:
-  chunk_size_mb: 8
-  thread_count: 4
+  chunk_size: 8
+  max_workers: 4
 
-auto:
-  ram_usage_percent: 10
-  chunk_size_min_mb: 4
-  chunk_size_max_mb: 64
-  thread_count_cpu_percent: 75
-  thread_count_max: 16
-
-performance:
-  checkpoint_interval: 10
-  buffer_multiplier: 2

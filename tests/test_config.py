@@ -1,5 +1,5 @@
 import pytest
-from utils.config import get_file_size,getSystemDetails
+from utils.tools import get_file_size,get_system_details
 
 
 def test_get_file_size():
@@ -22,7 +22,7 @@ def test_get_file_size():
 
 
 def test_getSystemDetails():
-    result = getSystemDetails()
+    result = get_system_details()
 
     assert 'total_gb' in result
     assert 'available_gb' in result

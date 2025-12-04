@@ -2,6 +2,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .tools import ASCIIBar
 from .backup import SafeBackupWriter
 from .logger import auto_logger
+from .config import lock_auto_config
 from rich.progress import Progress, TextColumn, TimeElapsedColumn
 import datetime
 import hashlib
@@ -15,13 +16,16 @@ logger = auto_logger()
 
 
 class Lock:
-    def __init__(self, password, folder, name="data", max_workers=4):  
+    def __init__(self, password, folder, name="data"):  
         self.password = password
         self.folder = folder
         self.output = name + ".bin"
         self.tar_path = name + ".tar"
-        self.chunk_size = 8 * 1024 * 1024
-        self.max_workers = max_workers
+
+        chunk,worker = lock_auto_config(folder=folder)
+        
+        self.chunk_size = chunk
+        self.max_workers = worker
         
         self.key = self.password_to_key(password)
     

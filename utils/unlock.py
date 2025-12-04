@@ -8,6 +8,7 @@ import platform
 import tempfile
 import tarfile
 import shutil
+import sys
 import os
 
 
@@ -19,6 +20,7 @@ class Unlock(Lock):
         self.data_file = data_file + ".bin"
         self.chunk_size = 8 * 1024 * 1024
         self.key = self.password_to_key(password)
+        self.output = data_file
         
         self.system = platform.system()
         self.temp_dir = None
@@ -86,7 +88,14 @@ class Unlock(Lock):
                     progress.update(task, advance=4 + 12 + block_len)
 
     def extract_tar_stream(self, tar_path, out_dir):
-        """Open the TAR archive"""
+        """Open the TAR archive with security filter"""
+        extraction_filter = None
+        if sys.version_info >= (3, 12):
+            try:
+                extraction_filter = tarfile.data_filter
+            except AttributeError:
+                extraction_filter = None
+        
         with tarfile.open(tar_path, "r") as tar:
             members = tar.getmembers()
             
@@ -99,7 +108,10 @@ class Unlock(Lock):
                 task = progress.add_task("extract", total=len(members))
                 
                 for member in members:
-                    tar.extract(member, path=out_dir)
+                    if extraction_filter:
+                        tar.extract(member, path=out_dir, filter=extraction_filter)
+                    else:
+                        tar.extract(member, path=out_dir)
                     progress.update(task, advance=1)
 
     def open_folder(self):

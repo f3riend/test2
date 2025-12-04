@@ -22,7 +22,7 @@ def test_password_to_key():
 def test_lock_small_folder(sample_folder, test_password, temp_dir):
     output_path = os.path.join(temp_dir, "encrypted")
 
-    locker = Lock(test_password, sample_folder, output_path, max_workers=2)
+    locker = Lock(test_password, sample_folder, output_path)
     locker.run(use_threading=False)
 
     assert os.path.exists(output_path + ".bin")
@@ -34,7 +34,7 @@ def test_lock_small_folder(sample_folder, test_password, temp_dir):
 def test_lock_and_unlock_cycle(sample_folder, test_password, temp_dir):
     output_path = os.path.join(temp_dir, "encrypted")
 
-    locker = Lock(test_password, sample_folder, output_path, max_workers=2)
+    locker = Lock(test_password, sample_folder, output_path)
     locker.run(use_threading=False)
 
 

@@ -50,7 +50,7 @@ def test_decrypt_stream(sample_folder, test_password, temp_dir):
     """Decrypt stream testi"""
     # Önce encrypt et
     output_path = os.path.join(temp_dir, "encrypted")
-    locker = Lock(test_password, sample_folder, output_path, max_workers=2)
+    locker = Lock(test_password, sample_folder, output_path)
     locker.run(use_threading=False)
     
     # Şimdi decrypt et
@@ -72,7 +72,7 @@ def test_extract_tar_stream(sample_folder, test_password, temp_dir):
     """TAR extract testi"""
     # Encrypt -> Decrypt yap
     output_path = os.path.join(temp_dir, "encrypted")
-    locker = Lock(test_password, sample_folder, output_path, max_workers=2)
+    locker = Lock(test_password, sample_folder, output_path)
     locker.run(use_threading=False)
     
     unlocker = Unlock(test_password, output_path)
@@ -91,9 +91,9 @@ def test_extract_tar_stream(sample_folder, test_password, temp_dir):
     extracted_files = os.listdir(extract_dir)
     assert len(extracted_files) > 0
     
-    # Orijinal dosyalar var mı?
+    # Orijinal dosyalar var mı? (ALT ÇİZGİ KALDIRILDI!)
     for i in range(3):
-        expected_file = os.path.join(extract_dir, f"file_{i}.txt")
+        expected_file = os.path.join(extract_dir, f"file{i}.txt")  # DÜZELTME: file_0.txt -> file0.txt
         assert os.path.exists(expected_file)
 
 
@@ -101,7 +101,7 @@ def test_wrong_password_decrypt(sample_folder, test_password, temp_dir):
     """Yanlış password ile decrypt testi"""
     # Doğru password ile encrypt
     output_path = os.path.join(temp_dir, "encrypted")
-    locker = Lock(test_password, sample_folder, output_path, max_workers=2)
+    locker = Lock(test_password, sample_folder, output_path)
     locker.run(use_threading=False)
     
     # Yanlış password ile decrypt dene
