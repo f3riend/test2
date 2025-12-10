@@ -1,7 +1,7 @@
 import click
-from utils.lock import Lock
-from utils.unlock import Unlock
-from utils.logger import auto_logger
+from secure_box.utils.lock import Lock
+from secure_box.utils.unlock import Unlock
+from secure_box.utils.logger import auto_logger
 
 
 logger = auto_logger()
@@ -28,6 +28,14 @@ def lock(folder, output, password, resume):
         logger.error(f"Lock failed: {e}")
         click.echo(click.style(f"✗ Lock failed: {e}", fg='red'))
         raise SystemExit(1)
+    
+
+
+@cli.command()
+def success():
+    """Prints initialization success message"""
+    click.echo(click.style("✓ Successfully initialized!", fg='green'))
+
 
 
 @cli.command()

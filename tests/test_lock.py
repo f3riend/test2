@@ -1,4 +1,4 @@
-from utils.lock import Lock
+from secure_box.utils.lock import Lock
 import pytest
 import os
 
@@ -38,7 +38,7 @@ def test_lock_and_unlock_cycle(sample_folder, test_password, temp_dir):
     locker.run(use_threading=False)
 
 
-    from utils.unlock import Unlock
+    from secure_box.utils.unlock import Unlock
     unlocker = Unlock(test_password, output_path)
 
 

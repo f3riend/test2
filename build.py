@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 PROJECT_NAME = "secure-box"
-MAIN_FILE = "main.py"
+MAIN_FILE = "src/secure_box/cli.py"
 DIST_DIR = Path("dist")
 BUILD_DIR = Path("build")
 

@@ -1,5 +1,5 @@
 import pytest
-from utils.tools import get_file_size,get_system_details
+from secure_box.utils.tools import get_file_size,get_system_details
 
 
 def test_get_file_size():

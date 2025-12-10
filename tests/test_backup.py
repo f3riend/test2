@@ -2,7 +2,7 @@ import pytest
 import os
 import json
 import time
-from utils.backup import SafeBackupWriter
+from secure_box.utils.backup import SafeBackupWriter
 
 def test_backup_writer_initialization(temp_dir):
     out_path = os.path.join(temp_dir, "test.bin")

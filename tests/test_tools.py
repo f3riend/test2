@@ -1,5 +1,5 @@
 import pytest
-from utils.tools import ASCIIBar
+from secure_box.utils.tools import ASCIIBar
 from rich.progress import Task
 
 

@@ -2,8 +2,8 @@
 import pytest
 import os
 import tarfile
-from utils.unlock import Unlock
-from utils.lock import Lock
+from secure_box.utils.unlock import Unlock
+from secure_box.utils.lock import Lock
 
 
 def test_unlock_initialization(test_password):
